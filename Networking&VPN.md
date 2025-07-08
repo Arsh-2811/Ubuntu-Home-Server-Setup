@@ -46,29 +46,70 @@
 
 ---
 
-### 5. User Experience (Netdata Example)
+## ✅ **Workflow: Securely Serving Netdata in a Private Tailnet**
 
-1. **On Your Mobile or Laptop** (with Tailscale running): you open your browser and type
+### **1. Components & What They Do**
+
+| Component     | Role in System                             | Default Port(s)                          |
+| ------------- | ------------------------------------------ | ---------------------------------------- |
+| **Tailscale** | Creates private VPN between devices        | No specific port (uses WireGuard tunnel) |
+| **Pi‑hole**   | DNS server (ad-blocker + custom hostnames) | `53` (DNS)                               |
+| **Nginx**     | Accepts HTTPS traffic, forwards to Netdata | `80`, `443`                              |
+| **Netdata**   | Real-time dashboard for system metrics     | `19999` (internal only)                  |
+| **mkcert**    | Creates trusted HTTPS certificates locally | —                                        |
+
+---
+
+### 5. End-to-End Flow: What Happens When You Visit `https://netdata.homeserver`**
+
+#### 📲 Step-by-step Journey
+
+1. **User opens browser** and types:
 
    ```
    https://netdata.homeserver
    ```
-2. **DNS Resolution:** Tailscale intercepts the query for `*.homeserver` and forwards it to Pi‑hole, which returns the Tailnet IP of your server.
-3. **TLS Connection:** Your browser connects to that IP on port 443. Nginx presents the mkcert‑signed certificate for `netdata.homeserver`, so the lock icon appears—no warnings.
-4. **Proxying:** Nginx passes the request to the real Netdata service on port 19999 and returns the dashboard over the same HTTPS session.
-5. **Security Boundaries:**
 
-   * All transport is encrypted twice: first by WireGuard (Tailscale) and second by TLS (Nginx + mkcert).
-   * Only devices authenticated into your Tailnet can even resolve or reach `netdata.homeserver`.
+2. **DNS Lookup** happens automatically:
+
+   * Tailscale sees `.homeserver` and sends the DNS request to Pi‑hole (on your home server).
+   * Pi‑hole says: "`netdata.homeserver` lives at 100.x.y.z (your server’s Tailnet IP)".
+
+3. **Browser connects to 100.x.y.z on port 443**
+
+   * The browser makes a secure connection (HTTPS) to **port 443**, which goes to Nginx.
+   * Nginx presents the TLS certificate created by **mkcert** for `netdata.homeserver`.
+
+4. **TLS Handshake succeeds**
+
+   * No warnings. You see 🔒 lock icon because mkcert's CA is trusted on your device.
+
+5. **Nginx reverse-proxies the request**
+
+   * It looks at the host (`netdata.homeserver`), and internally forwards the request to **localhost:19999** (Netdata).
+
+6. **Netdata serves the dashboard**
+
+   * Netdata responds.
+   * Nginx passes that back to your browser—still over the same secure HTTPS connection.
 
 ---
 
-### 6. Why This Architecture?
+### **6. Bonus: How Ad-Blocking Works**
 
-* **No Public Exposure:** You never open ports on your home router; only Tailnet members can see or connect.
-* **No Paid CA or Public DNS Needed:** mkcert supplies trusted certs, and split‑DNS keeps everything private.
-* **Clean, Memorable URLs:** No port numbers; you type a simple hostname under HTTPS.
-* **Modular & Extensible:** Repeat the same pattern for Cockpit, Nextcloud, Immich, or any other service—just add DNS entries, mkcert hostnames, and Nginx blocks.
+* When any device inside your Tailnet asks for ads (like `ads.google.com`), that DNS request is also sent to **Pi-hole** on port 53.
+* Pi-hole checks its blocklist and returns a dummy IP (`0.0.0.0`), blocking the ad.
+* Works system-wide for any device using Pi‑hole as DNS via Tailscale config.
+
+---
+
+### 7. Why This Rocks**
+
+* ✅ **No ports open to the internet** → fully private.
+* ✅ **Custom hostnames** → no more IPs or ports to remember.
+* ✅ **HTTPS with zero cost** → mkcert makes it trusted locally.
+* ✅ **Ad‑blocking + DNS resolution in one place** → Pi‑hole.
+* ✅ **Runs all on one Ubuntu laptop** → simple, secure home server.
 
 ---
 
